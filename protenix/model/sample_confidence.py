@@ -197,7 +197,7 @@ def _compute_full_data_and_summary(
             )
             N_sample = atom_coordinate.shape[0]
             vdw_clash_per_sample_flag = (
-                vdw_clash[:, interested_asym_id, :].reshape(N_sample, -1).max(dim=-1)[0]
+                vdw_clash[:, interested_asym_id, :].reshape(N_sample, -1).any(dim=-1)
             )
             summary_confidence["has_vdw_pl_clash"] = vdw_clash_per_sample_flag
             summary_confidence["pb_ranking_score_vdw_penalized"] = (
@@ -417,7 +417,7 @@ def calculate_clash(
         dummy_is_dna,
         dummy_is_rna,
     )
-    return clash_dict["summary"]["af3_clash"].reshape(N_sample, -1).max(dim=-1)[0]
+    return clash_dict["summary"]["af3_clash"].reshape(N_sample, -1).any(dim=-1)
 
 
 def calculate_ptm(

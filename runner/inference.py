@@ -35,6 +35,7 @@ from configs.configs_model_type import model_configs
 from protenix.config.config import parse_configs, parse_sys_args
 from protenix.data.inference.infer_dataloader import get_inference_dataloader
 from protenix.model.protenix import Protenix
+from protenix.utils import torch_backend
 from protenix.utils.distributed import DIST_WRAPPER
 from protenix.utils.seed import seed_everything
 from protenix.utils.torch_utils import to_device
@@ -92,21 +93,24 @@ class InferenceRunner(object):
             f"Distributed environment: world size: {DIST_WRAPPER.world_size}, "
             f"global rank: {DIST_WRAPPER.rank}, local rank: {DIST_WRAPPER.local_rank}"
         )
-        self.use_cuda = torch.cuda.device_count() > 0
+        self.use_cuda = torch_backend.accel_available()
         if self.use_cuda:
-            self.device = torch.device(f"cuda:{DIST_WRAPPER.local_rank}")
-            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            all_gpu_ids = ",".join(str(x) for x in range(torch.cuda.device_count()))
+            self.device = torch.device(
+                f"{torch_backend.device_type()}:{DIST_WRAPPER.local_rank}"
+            )
+            if torch_backend.cuda_available():
+                os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            all_gpu_ids = ",".join(str(x) for x in range(torch_backend.device_count()))
             devices = os.getenv("CUDA_VISIBLE_DEVICES", all_gpu_ids)
             logging.info(
-                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - CUDA_VISIBLE_DEVICES: [{devices}]"
+                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - VISIBLE_DEVICES: [{devices}]"
             )
-            torch.cuda.set_device(self.device)
+            torch_backend.set_device(self.device)
         else:
             self.device = torch.device("cpu")
 
         if DIST_WRAPPER.world_size > 1:
-            dist.init_process_group(backend="nccl")
+            dist.init_process_group(backend=torch_backend.distributed_backend())
 
         if self.configs.triangle_attention == "deepspeed":
             env = os.getenv("CUTLASS_PATH", None)
@@ -221,8 +225,8 @@ class InferenceRunner(object):
         }[self.configs.dtype]
 
         enable_amp = (
-            torch.autocast(device_type="cuda", dtype=eval_precision)
-            if torch.cuda.is_available()
+            torch.autocast(device_type=torch_backend.device_type(), dtype=eval_precision)
+            if torch_backend.accel_available()
             else nullcontext()
         )
 
@@ -619,7 +623,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     f"Model forward time: {t2_end - t2_start:.2f}s. "
                     f"Results saved to {configs.dump_dir}"
                 )
-                torch.cuda.empty_cache()
+                torch_backend.empty_cache()
             except Exception as e:
                 error_message = (
                     f"[Rank {DIST_WRAPPER.rank}] {sample_name} failed: {e}\n"
@@ -632,7 +636,7 @@ def infer_predict(runner: InferenceRunner, configs: Any) -> None:
                     encoding="utf-8",
                 ) as f:
                     f.write(error_message)
-                torch.cuda.empty_cache()
+                torch_backend.empty_cache()
         t1_end = time.time()
         logger.info(
             f"[Rank {DIST_WRAPPER.rank}] Seed {seed} completed in {t1_end - t1_start:.2f}s."
@@ -675,9 +679,9 @@ def update_gpu_compatible_configs(configs: Any) -> Any:
 
     def is_gpu_capability_between_7_and_8() -> bool:
         # Check if 7.0 <= device_capability < 8.0
-        if not torch.cuda.is_available():
+        capability = torch_backend.get_device_capability()
+        if capability is None:
             return False
-        capability = torch.cuda.get_device_capability()
         major, minor = capability
         cc = major + minor / 10.0
         return 7.0 <= cc < 8.0

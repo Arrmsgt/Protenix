@@ -20,6 +20,8 @@ import torch
 from torch import nn
 from torch.nn.parameter import Parameter
 
+from protenix.utils import torch_backend
+
 
 def grad_norm(params):
     total_norm = 0.0
@@ -200,7 +202,7 @@ def autocasting_disable_decorator(disable_casting):
     def func_wrapper(func):
         def new_func(*args, **kwargs):
             _amp_context = (
-                torch.autocast(device_type="cuda", enabled=False)
+                torch.autocast(device_type=torch_backend.device_type(), enabled=False)
                 if disable_casting
                 else nullcontext()
             )

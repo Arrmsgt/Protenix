@@ -45,6 +45,7 @@ from protenix.model.modules.pairformer import (
 from protenix.model.modules.primitives import LinearNoBias
 from protenix.model.triangular.layers import LayerNorm
 from protenix.model.utils import simple_merge_dict_list
+from protenix.utils import torch_backend
 from protenix.utils.logger import get_logger
 from protenix.utils.permutation.permutation import SymmetricPermutation
 from protenix.utils.torch_utils import autocasting_disable_decorator
@@ -96,7 +97,8 @@ class Protenix(nn.Module):
     def __init__(self, configs: Any) -> None:
         super(Protenix, self).__init__()
         self.configs = configs
-        torch.backends.cuda.matmul.allow_tf32 = self.configs.enable_tf32
+        if torch_backend.supports_tf32():
+            torch.backends.cuda.matmul.allow_tf32 = self.configs.enable_tf32
         # Some constants
         self.enable_diffusion_shared_vars_cache = (
             self.configs.enable_diffusion_shared_vars_cache

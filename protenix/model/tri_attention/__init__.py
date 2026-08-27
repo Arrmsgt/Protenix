@@ -19,11 +19,16 @@
 # - Falls back to PyTorch's scaled_dot_product_attention when Triton unavailable
 
 import warnings
+from contextlib import nullcontext
 from typing import Any, Optional
 
 import torch
 
+from protenix.utils import torch_backend
+
 try:
+    if not torch_backend.cuda_available():
+        raise RuntimeError("Triton triangle attention only supports CUDA")
     # Try to import Triton implementation
     import triton
     from protenix.model.tri_attention.op import TriAttention, TriAttentionFunction
@@ -69,11 +74,16 @@ except (ImportError, RuntimeError) as e:
                     attn_mask = attn_mask + bias2_reshaped
             
             # Use PyTorch's optimized attention
-            with torch.backends.cuda.sdp_kernel(
-                enable_flash=True,
-                enable_math=True,
-                enable_mem_efficient=True
-            ):
+            sdp_ctx = (
+                torch.backends.cuda.sdp_kernel(
+                    enable_flash=True,
+                    enable_math=True,
+                    enable_mem_efficient=True
+                )
+                if torch_backend.supports_sdp_kernel()
+                else nullcontext()
+            )
+            with sdp_ctx:
                 out = torch.nn.functional.scaled_dot_product_attention(
                     q, k, v,
                     attn_mask=attn_mask,

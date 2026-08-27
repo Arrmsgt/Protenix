@@ -17,6 +17,8 @@ import inspect
 import torch
 import torch.distributed as dist
 
+from protenix.utils import torch_backend
+
 
 def get_adamw(
     model: torch.nn.Module,
@@ -82,7 +84,7 @@ def get_optimizer(
             weight_decay=configs.adam.weight_decay,
             learning_rate=configs.adam.lr,
             betas=(configs.adam.beta1, configs.adam.beta2),
-            device_type="cuda" if torch.cuda.is_available() else "cpu",
+            device_type=torch_backend.device_type(),
         )
     else:
         if param_names is None or len(param_names) == 0:
@@ -135,7 +137,7 @@ def is_loss_nan_check(loss: torch.Tensor) -> bool:
 
     nan_flag = torch.tensor(
         1.0 if is_nan(loss) else 0.0,
-        device=loss.device if torch.cuda.is_available() else None,
+        device=loss.device if torch_backend.accel_available() else None,
     )  # support cpu
     # avoid "Watchdog caught collective operation timeout" error
     all_reduce_tensor(nan_flag)

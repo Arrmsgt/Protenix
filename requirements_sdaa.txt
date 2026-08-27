@@ -1,0 +1,54 @@
+# ============================================================
+# Protenix SDAA 适配环境依赖（requirements_sdaa.txt）
+# 与原始 requirements.txt 的差异见文末说明
+# ============================================================
+
+# ---- SDAA 运行时（torch 全家，CPU 底座 + sdaa 插件）----
+#torch==2.12.0+cpu
+#torch_sdaa==3.2.1b0+git03fee48
+#torchvision==0.27.0+cpu
+#torchaudio==2.11.0+cpu
+#torchdata==0.9.0+cpu
+#torchtext==0.18.0+cpu
+
+# ---- torch 图/稀疏扩展（sdaa 构建）----
+#torch_geometric==2.3.1
+#torch_cluster==1.6.3
+#torch_scatter==2.1.2+sdaa
+#torch_sparse==0.6.18+sdaa
+#pyg_lib==0.7.0+sdaa
+
+# ---- 数值计算（注意：numpy 必须是 1.26.x，2.x 会破坏 SDAA torch ABI）----
+numpy==1.26.4
+scipy==1.17.1
+optree==0.19.1
+
+# ---- 数据/配置/通用 ----
+ml_collections==1.1.0
+pandas==2.3.3
+PyYAML==6.0.3
+tqdm==4.70.0
+networkx==3.6.1
+matplotlib
+
+# ---- 生化/结构 ----
+rdkit 
+biopython
+biotite
+fair-esm
+scikit-learn
+
+# ---- 说明：以下为原始 requirements.txt 中、本环境未安装的包 ----
+# [CUDA 专用，SDAA 移除]
+#   cuequivariance-ops-torch-cu12==0.8.0
+#   cuequivariance-torch==0.8.0
+#   deepspeed==0.17.5
+#   triton==3.3.1
+# [可选，非推理必需]
+#   ipywidgets==8.1.7        （交互式 notebook）
+#   py3Dmol==2.5.2          （3D 可视化）
+#   icecream==2.1.7 / ipdb==0.13.13 （调试）
+#   wandb==0.21.1           （训练日志）
+#   pydantic>=2.0.0 / protobuf==6.31.1 （当前推理流程未用到）
+#   modelcif / gemmi / pdbeccdutils （CIF/CCD 相关，Protenix 内部已自带处理）
+#   scikit-learn-extra==0.3.0

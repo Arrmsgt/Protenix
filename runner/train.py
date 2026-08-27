@@ -33,6 +33,7 @@ from protenix.data.pipeline.dataloader import get_dataloaders
 from protenix.metrics.lddt_metrics import LDDTMetrics
 from protenix.model.loss import ProtenixLoss
 from protenix.model.protenix import Protenix
+from protenix.utils import torch_backend
 from protenix.utils.distributed import DIST_WRAPPER
 from protenix.utils.lr_scheduler import FinetuneLRScheduler, get_lr_scheduler
 from protenix.utils.metrics import SimpleMetricAggregator
@@ -135,23 +136,27 @@ class AF3Trainer(object):
             f"Distributed environment: world size: {DIST_WRAPPER.world_size}, "
             f"global rank: {DIST_WRAPPER.rank}, local rank: {DIST_WRAPPER.local_rank}"
         )
-        self.use_cuda = torch.cuda.device_count() > 0
+        self.use_cuda = torch_backend.accel_available()
         if self.use_cuda:
-            self.device = torch.device(f"cuda:{DIST_WRAPPER.local_rank}")
-            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            all_gpu_ids = ",".join(str(x) for x in range(torch.cuda.device_count()))
+            self.device = torch.device(
+                f"{torch_backend.device_type()}:{DIST_WRAPPER.local_rank}"
+            )
+            if torch_backend.cuda_available():
+                os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            all_gpu_ids = ",".join(str(x) for x in range(torch_backend.device_count()))
             devices = os.getenv("CUDA_VISIBLE_DEVICES", all_gpu_ids)
             logging.info(
-                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - CUDA_VISIBLE_DEVICES: [{devices}]"
+                f"LOCAL_RANK: {DIST_WRAPPER.local_rank} - VISIBLE_DEVICES: [{devices}]"
             )
-            torch.cuda.set_device(self.device)
+            torch_backend.set_device(self.device)
         else:
             self.device = torch.device("cpu")
 
         if DIST_WRAPPER.world_size > 1:
             timeout_seconds = int(os.environ.get("NCCL_TIMEOUT_SECOND", 600))
             dist.init_process_group(
-                backend="nccl", timeout=datetime.timedelta(seconds=timeout_seconds)
+                backend=torch_backend.distributed_backend(),
+                timeout=datetime.timedelta(seconds=timeout_seconds),
             )
 
         if not self.configs.deterministic_seed:
@@ -223,7 +228,7 @@ class AF3Trainer(object):
             )
             self.ema_wrapper.register()
 
-        torch.cuda.empty_cache()
+        torch_backend.empty_cache()
         self.optimizer = get_optimizer(
             self.configs,
             self.model,
@@ -507,8 +512,8 @@ class AF3Trainer(object):
             "fp16": torch.float16,
         }[self.configs.dtype]
         enable_amp = (
-            torch.autocast(device_type="cuda", dtype=eval_precision)
-            if torch.cuda.is_available()
+            torch.autocast(device_type=torch_backend.device_type(), dtype=eval_precision)
+            if torch_backend.accel_available()
             else nullcontext()
         )
         self.model.eval()
@@ -557,7 +562,7 @@ class AF3Trainer(object):
                 del batch, simple_metrics
                 if index % 5 == 0:
                     # Release memory periodically
-                    torch.cuda.empty_cache()
+                    torch_backend.empty_cache()
 
             metrics = simple_metric_wrapper.calc()
             self.print(f"Step {self.step}, eval {test_name}: {metrics}")
@@ -588,14 +593,16 @@ class AF3Trainer(object):
         }[self.configs.dtype]
         enable_amp = (
             torch.autocast(
-                device_type="cuda", dtype=train_precision, cache_enabled=False
+                device_type=torch_backend.device_type(),
+                dtype=train_precision,
+                cache_enabled=False,
             )
-            if torch.cuda.is_available()
+            if torch_backend.accel_available()
             else nullcontext()
         )
 
         scaler = torch.GradScaler(
-            device="cuda" if torch.cuda.is_available() else "cpu",
+            device=torch_backend.device_type(),
             enabled=(self.configs.dtype == "float16"),
         )
 
@@ -625,7 +632,7 @@ class AF3Trainer(object):
             if "loss" not in key:
                 continue
             self.train_metric_wrapper.add(key, value, namespace="train")
-        torch.cuda.empty_cache()
+        torch_backend.empty_cache()
 
     def progress_bar(self, desc: str = "") -> None:
         """

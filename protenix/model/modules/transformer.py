@@ -743,8 +743,8 @@ class AtomAttentionEncoder(nn.Module):
         batch_shape = ref_pos.shape[:-2]
         N_atom = ref_pos.shape[-2]
         c_l = self.linear_no_bias_ref_pos(ref_pos) + self.linear_no_bias_ref_charge(
-            # use arcsinh for ref_charge
-            torch.arcsinh(ref_charge).reshape(*batch_shape, N_atom, 1)
+            # use arcsinh for ref_charge (cast to float: SDAA arcsinh has no int->float promotion)
+            torch.arcsinh(ref_charge.float()).reshape(*batch_shape, N_atom, 1)
         )
         if inplace_safe:
             c_l += self.linear_no_bias_f(

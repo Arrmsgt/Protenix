@@ -138,3 +138,15 @@ output/
 release_data/
 debug/
 .trae/
+
+# SDAA adaptation: MSA outputs & inference results (runtime artifacts)
+msa_output/
+msa_output_multimer/
+output_dna_msa/
+output_multimer_msa/
+
+# SDAA adaptation: test input JSON (ad-hoc validation inputs, keep local only)
+protein_dna.json
+multimer_ligand.json
+protein_dna-update-msa.json
+multimer_ligand-update-msa.json

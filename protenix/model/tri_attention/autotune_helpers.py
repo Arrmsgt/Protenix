@@ -19,12 +19,13 @@ from typing import Any
 import torch
 import triton
 
+from protenix.utils import torch_backend
 from protenix.utils.distributed import DIST_WRAPPER
 
-device_capability = torch.cuda.get_device_capability()
-device_capability = f"{device_capability[0]}-{device_capability[1]}"
+_cap = torch_backend.get_device_capability()
+device_capability = f"{_cap[0]}-{_cap[1]}" if _cap else "unknown"
 
-device_name = torch.cuda.get_device_name().replace(" ", "-")
+device_name = torch_backend.get_device_name().replace(" ", "-")
 
 
 def get_config_dir() -> Path:
